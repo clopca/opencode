@@ -282,10 +282,19 @@ const live: Layer.Layer<
         result: streamText({
           // Copilot returns the authoritative billed amount only in provider-specific response fields.
           includeRawChunks: input.model.providerID.includes("github-copilot"),
-          onError(error) {
+          onError({ error }) {
+            // ai-sdk's default behavior when `onError` is provided is to swallow
+            // the error (stream ends silently). That leaves the UI waiting
+            // forever. Re-throw so the underlying async iterator surfaces the
+            // error through `fullStream` and the session can show it / abort.
             l.error("stream error", {
               error,
+              sessionID: input.sessionID,
+              agent: input.agent.name,
+              model: input.model.id,
+              providerID: input.model.providerID,
             })
+            throw error instanceof Error ? error : new Error(String(error))
           },
           async experimental_repairToolCall(failed) {
             const lower = failed.toolCall.toolName.toLowerCase()

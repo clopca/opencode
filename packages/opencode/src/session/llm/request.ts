@@ -124,8 +124,14 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       temperature: input.model.capabilities.temperature
         ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
         : undefined,
-      topP: input.agent.topP ?? ProviderTransform.topP(input.model),
-      topK: ProviderTransform.topK(input.model),
+      // Anthropic groups temperature/top_p/top_k under a single "sampling
+      // parameters" capability. Claude Opus 4.7 rejects any non-default
+      // value for any of them (400 invalid_request_error on Bedrock and
+      // the Anthropic API). Gate all three behind the same flag.
+      topP: input.model.capabilities.temperature
+        ? (input.agent.topP ?? ProviderTransform.topP(input.model))
+        : undefined,
+      topK: input.model.capabilities.temperature ? ProviderTransform.topK(input.model) : undefined,
       maxOutputTokens: ProviderTransform.maxOutputTokens(input.model, input.flags.outputTokenMax),
       options,
     },
@@ -174,7 +180,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     tools: Object.fromEntries(Object.entries(tools).toSorted(([a], [b]) => a.localeCompare(b))),
     params,
     messageTransformOptions: options,
-    headers: {
+    headers: stripIncompatibleAnthropicBetas(input.model, {
       ...(input.model.providerID.startsWith("opencode")
         ? {
             ...(opencodeProjectID ? { "x-opencode-project": opencodeProjectID } : {}),
@@ -190,9 +196,47 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
           }),
       ...input.model.headers,
       ...headers,
-    },
+    }),
   }
 })
+
+// Anthropic beta flags that specific models reject. `@ai-sdk/anthropic@3.0.71`
+// stops adding `fine-grained-tool-streaming` automatically, but opencode injects
+// it at the provider level via `model.headers` (see provider.ts custom anthropic
+// options), which bypasses the SDK's filtering. Strip it for known-incompatible
+// models so the request doesn't advertise conflicting betas to Anthropic/Bedrock.
+//
+// TODO: migrate to a `capabilities.fineGrainedToolStreaming` flag in the model
+// schema once upstream (models.dev) exposes it; string-matching on `api.id` is
+// a stopgap that needs updating for every new incompatible model id.
+const INCOMPATIBLE_BETAS: Array<{ beta: string; matches: (apiId: string) => boolean }> = [
+  {
+    beta: "fine-grained-tool-streaming-2025-05-14",
+    matches: (apiId) => apiId.includes("opus-4-7") || apiId.includes("opus-4.7"),
+  },
+]
+
+function stripIncompatibleAnthropicBetas(
+  model: Provider.Model,
+  headers: Record<string, string>,
+): Record<string, string> {
+  const beta = headers["anthropic-beta"]
+  if (typeof beta !== "string") return headers
+
+  const apiId = model.api.id
+  const drop = new Set(INCOMPATIBLE_BETAS.filter((r) => r.matches(apiId)).map((r) => r.beta))
+  if (drop.size === 0) return headers
+
+  const kept = beta
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !drop.has(s))
+
+  const next = { ...headers }
+  if (kept.length === 0) delete next["anthropic-beta"]
+  else next["anthropic-beta"] = kept.join(",")
+  return next
+}
 
 function resolveTools(input: Pick<PrepareInput, "tools" | "agent" | "permission" | "user">) {
   const disabled = Permission.disabled(

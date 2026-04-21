@@ -1220,11 +1220,23 @@ export const layer = Layer.effect(
         const slog = elog.with({ sessionID })
         let structured: unknown
         let step = 0
+        let previousStepStart: number | undefined
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
         while (true) {
           yield* status.set(sessionID, { type: "busy" })
-          yield* slog.info("loop", { step })
+          const stepStart = Date.now()
+          // Log how long the previous step took from its start to this new
+          // iteration. Makes it easy to spot hangs *between* stream turns
+          // (tool execution, re-prompt, compaction, etc.) vs. hangs *inside*
+          // a stream (which can be bounded per provider via
+          // `config.provider[id].options.chunkTimeout`; see provider.ts:wrapSSE).
+          const sincePreviousStepMs = previousStepStart !== undefined ? stepStart - previousStepStart : undefined
+          yield* slog.info("loop", {
+            step,
+            ...(sincePreviousStepMs !== undefined ? { sincePreviousStepMs } : {}),
+          })
+          previousStepStart = stepStart
 
           let msgs = yield* MessageV2.filterCompactedEffect(sessionID).pipe(
             Effect.provideService(Database.Service, database),

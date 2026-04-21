@@ -974,6 +974,13 @@ const ProviderInterleaved = Schema.Union([
 ])
 
 const ProviderCapabilities = Schema.Struct({
+  // Whether the model accepts non-default sampling parameters. When `false`,
+  // opencode omits `temperature`, `topP`, and `topK` from the request. Anthropic
+  // groups these under a single "sampling parameters" concept (Claude Opus 4.7
+  // rejects any non-default value for any of them with a 400 invalid_request_error
+  // on Bedrock and the Anthropic API), which is why all three are gated behind
+  // this single flag. TODO: split into `temperature` / `topP` / `topK` if a
+  // provider ever needs finer-grained control.
   temperature: Schema.Boolean,
   reasoning: Schema.Boolean,
   attachment: Schema.Boolean,

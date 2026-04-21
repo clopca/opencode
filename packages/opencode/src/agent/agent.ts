@@ -377,7 +377,9 @@ export const layer = Layer.effect(
               userId: cfg.username ?? "unknown",
             },
           },
-          temperature: 0.3,
+          // Some models (e.g. Claude Opus 4.7 on Bedrock/Anthropic) reject any
+          // non-default value for `temperature`. Only send it when supported.
+          temperature: resolved.capabilities.temperature ? 0.3 : undefined,
           messages: [
             ...(isOpenaiOauth
               ? []
