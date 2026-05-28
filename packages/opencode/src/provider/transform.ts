@@ -574,7 +574,16 @@ function openaiCompatibleReasoningEfforts(id: string) {
   return gpt5CodexReasoningEfforts(apiId) ?? versionedGpt5ReasoningEfforts(apiId) ?? OPENAI_EFFORTS
 }
 
-function anthropicOpus47OrLater(apiId: string) {
+// Anthropic models that *only* support adaptive thinking. On these, manual
+// extended thinking (`thinking: {type: "enabled", budget_tokens}` / Bedrock
+// `reasoningConfig: {type: "enabled"}`) is rejected with a 400 ("thinking.type.enabled"
+// is not supported ... use "thinking.type.adaptive" and "output_config.effort").
+// They also omit thinking content by default (hence `display: "summarized"`) and
+// reject the legacy `fine-grained-tool-streaming` / `interleaved-thinking` betas.
+// This is the Opus 4.7+ family (4.7, 4.8, ...); each new Opus release ships the
+// same contract, so version-matching here covers future ids automatically. See:
+// https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
+export function anthropicOpus47OrLater(apiId: string) {
   // Matches "opus-4.7" (Anthropic/Bedrock/Vertex) and "claude-4.7-opus" (SAP AI Core inverted).
   // Greedy \d+ correctly extends to multi-digit majors (e.g. "claude-10.0-opus") for forward compatibility.
   const version = /opus-(\d+)[.-](\d+)(?:[.@-]|$)|claude-(\d+)[.-](\d+)-opus(?:[.@-]|$)/i.exec(apiId)

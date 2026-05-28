@@ -206,13 +206,24 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
 // options), which bypasses the SDK's filtering. Strip it for known-incompatible
 // models so the request doesn't advertise conflicting betas to Anthropic/Bedrock.
 //
+// The incompatible set is the Opus 4.7+ adaptive-only family, identified by the
+// shared `ProviderTransform.anthropicOpus47OrLater` predicate so new Opus ids are
+// covered automatically (version-matched in transform.ts) without touching this
+// list. These models reject both legacy betas opencode injects: `interleaved-thinking`
+// is only relevant for the deprecated manual `type: "enabled"` path, which they no
+// longer accept, so it is safe (and required) to drop here.
+//
 // TODO: migrate to a `capabilities.fineGrainedToolStreaming` flag in the model
 // schema once upstream (models.dev) exposes it; string-matching on `api.id` is
-// a stopgap that needs updating for every new incompatible model id.
+// a stopgap.
 const INCOMPATIBLE_BETAS: Array<{ beta: string; matches: (apiId: string) => boolean }> = [
   {
     beta: "fine-grained-tool-streaming-2025-05-14",
-    matches: (apiId) => apiId.includes("opus-4-7") || apiId.includes("opus-4.7"),
+    matches: (apiId) => ProviderTransform.anthropicOpus47OrLater(apiId),
+  },
+  {
+    beta: "interleaved-thinking-2025-05-14",
+    matches: (apiId) => ProviderTransform.anthropicOpus47OrLater(apiId),
   },
 ]
 

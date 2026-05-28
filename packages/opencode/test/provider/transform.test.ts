@@ -3368,6 +3368,34 @@ describe("ProviderTransform.variants", () => {
       })
     })
 
+    test("opus 4.8 returns adaptive thinking options with xhigh", () => {
+      const model = createMockModel({
+        id: "anthropic/claude-opus-4-8",
+        providerID: "anthropic",
+        api: {
+          id: "claude-opus-4-8",
+          url: "https://api.anthropic.com",
+          npm: "@ai-sdk/anthropic",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["low", "medium", "high", "xhigh", "max"])
+      expect(result.xhigh).toEqual({
+        thinking: {
+          type: "adaptive",
+          display: "summarized",
+        },
+        effort: "xhigh",
+      })
+      expect(result.max).toEqual({
+        thinking: {
+          type: "adaptive",
+          display: "summarized",
+        },
+        effort: "max",
+      })
+    })
+
     test("returns high and max with thinking config", () => {
       const model = createMockModel({
         id: "anthropic/claude-4",
@@ -3469,22 +3497,28 @@ describe("ProviderTransform.variants", () => {
     })
 
     test("anthropic opus 4.8 returns adaptive reasoning options with xhigh", () => {
-      const result = ProviderTransform.variants(
-        createMockModel({
-          id: "bedrock/anthropic-claude-opus-4.8",
-          providerID: "bedrock",
-          api: {
-            id: "anthropic.claude-opus-4.8",
-            url: "https://bedrock.amazonaws.com",
-            npm: "@ai-sdk/amazon-bedrock",
-          },
-        }),
-      )
+      const model = createMockModel({
+        id: "bedrock/anthropic-claude-opus-4-8",
+        providerID: "bedrock",
+        api: {
+          id: "us.anthropic.claude-opus-4-8",
+          url: "https://bedrock.amazonaws.com",
+          npm: "@ai-sdk/amazon-bedrock",
+        },
+      })
+      const result = ProviderTransform.variants(model)
       expect(Object.keys(result)).toEqual(["low", "medium", "high", "xhigh", "max"])
-      expect(result.high).toEqual({
+      expect(result.xhigh).toEqual({
         reasoningConfig: {
           type: "adaptive",
-          maxReasoningEffort: "high",
+          maxReasoningEffort: "xhigh",
+          display: "summarized",
+        },
+      })
+      expect(result.max).toEqual({
+        reasoningConfig: {
+          type: "adaptive",
+          maxReasoningEffort: "max",
           display: "summarized",
         },
       })
