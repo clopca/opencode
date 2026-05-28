@@ -76,6 +76,29 @@ Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
   - `packages/desktop`: The native desktop app, built with Electron (wraps `packages/app`)
   - `packages/plugin`: Source for `@opencode-ai/plugin`
 
+### Using the dev build as the global `opencode` command
+
+If you want `opencode` on your `PATH` to point to your local dev build (instead of the official binary installed at `~/.opencode/bin/opencode`), install this repo's package globally with bun:
+
+```bash
+bun install -g ./packages/opencode
+```
+
+This creates a symlink at `~/.bun/bin/opencode` that wins over `~/.opencode/bin/opencode` because `~/.bun/bin` comes first in the `PATH`. Verify with:
+
+```bash
+which -a opencode
+opencode --version   # should print a 0.0.0-dev-<timestamp> version
+```
+
+To stop using the dev build and fall back to the official `opencode` again:
+
+```bash
+bun remove -g opencode-ai
+```
+
+After that, `which opencode` should resolve to `~/.opencode/bin/opencode` and `opencode --version` should print the released version. Reinstall with the `bun install -g ./packages/opencode` command above whenever you need the dev build back.
+
 ### Understanding bun dev vs opencode
 
 During development, `bun dev` is the local equivalent of the built `opencode` command. Both run the same CLI interface:
