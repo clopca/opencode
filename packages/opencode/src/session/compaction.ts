@@ -361,6 +361,10 @@ export const layer = Layer.effect(
       const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
         stripMedia: true,
         toolOutputMaxChars: TOOL_OUTPUT_MAX_CHARS,
+        // Drop signed thinking blocks: compaction appends a summary prompt after
+        // the last assistant turn, which would make Anthropic/Bedrock reject the
+        // (now non-final) signed thinking blocks as "modified".
+        stripReasoning: true,
       })
       const tailIndex = selected.tail_start_id
         ? history.findIndex((message) => message.info.id === selected.tail_start_id)

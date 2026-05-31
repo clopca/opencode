@@ -1321,6 +1321,45 @@ describe("session.message-v2.toModelMessage", () => {
     expect(texts.map((t) => t.text)).toStrictEqual(["", "answer"])
   })
 
+  test("strips signed reasoning to plain text when stripReasoning is set", async () => {
+    // Compaction appends a summary prompt after the last assistant turn, so its
+    // signed thinking blocks would be rejected by Anthropic/Bedrock as "modified".
+    // stripReasoning must replay reasoning as plain text with no reasoning blocks
+    // and no signature metadata, regardless of the provider namespace.
+    const assistantID = "m-assistant-strip"
+    const input: SessionV1.WithParts[] = [
+      {
+        info: assistantInfo(assistantID, "m-parent"),
+        parts: [
+          {
+            ...basePart(assistantID, "p1"),
+            type: "reasoning",
+            text: "anthropic-thinking",
+            metadata: { anthropic: { signature: "sig-anthropic" } },
+          },
+          {
+            ...basePart(assistantID, "p2"),
+            type: "reasoning",
+            text: "bedrock-thinking",
+            metadata: { bedrock: { signature: "sig-bedrock" } },
+          },
+          { ...basePart(assistantID, "p3"), type: "text", text: "the answer" },
+        ] as SessionV1.Part[],
+      },
+    ]
+
+    const result = await MessageV2.toModelMessages(input, model, { stripReasoning: true })
+
+    expect(result).toHaveLength(1)
+    const content = result[0].content as any[]
+    expect(content.some((p) => p.type === "reasoning")).toBe(false)
+    expect(content.filter((p) => p.type === "text").map((t) => t.text)).toStrictEqual([
+      "anthropic-thinking",
+      "bedrock-thinking",
+      "the answer",
+    ])
+  })
+
   test("leaves empty text alone when reasoning has no Anthropic signature", async () => {
     // Non-Anthropic providers' reasoning doesn't position-validate, so empty text
     // should be filtered normally rather than substituted.

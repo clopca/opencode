@@ -143,7 +143,7 @@ function providerMeta(metadata: Record<string, any> | undefined) {
 export const toModelMessagesEffect = Effect.fnUntraced(function* (
   input: WithParts[],
   model: Provider.Model,
-  options?: { stripMedia?: boolean; toolOutputMaxChars?: number },
+  options?: { stripMedia?: boolean; toolOutputMaxChars?: number; stripReasoning?: boolean },
 ) {
   const result: UIMessage[] = []
   const toolNames = new Set<string>()
@@ -282,10 +282,15 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
       // here is the only safe replay point we have.
       // Use a single space so the separator survives replay without changing
       // the neighboring signed reasoning blocks.
-      const hasSignedReasoning = msg.parts.some((part) => {
-        if (part.type !== "reasoning") return false
-        return part.metadata?.anthropic?.signature != null
-      })
+      // When stripReasoning is set (e.g. compaction), reasoning is replayed as
+      // plain text without its signature, so there are no signed thinking blocks
+      // to preserve and the empty-text separator workaround below is moot.
+      const hasSignedReasoning =
+        !options?.stripReasoning &&
+        msg.parts.some((part) => {
+          if (part.type !== "reasoning") return false
+          return part.metadata?.anthropic?.signature != null
+        })
       for (const part of msg.parts) {
         if (part.type === "text") {
           const text = part.text === "" && hasSignedReasoning ? " " : part.text
@@ -372,7 +377,12 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
             })
         }
         if (part.type === "reasoning") {
-          if (differentModel) {
+          // Replay reasoning as plain text (dropping the provider signature) when
+          // the producing model differs or the caller opted into stripReasoning.
+          // Signed thinking blocks must be byte-for-byte identical on replay, which
+          // is impossible once a new prompt is appended after the turn (compaction)
+          // or the model that signed them is no longer in the request.
+          if (differentModel || options?.stripReasoning) {
             if (part.text.trim().length > 0)
               assistantMessage.parts.push({
                 type: "text",
@@ -429,7 +439,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
 export function toModelMessages(
   input: WithParts[],
   model: Provider.Model,
-  options?: { stripMedia?: boolean; toolOutputMaxChars?: number },
+  options?: { stripMedia?: boolean; toolOutputMaxChars?: number; stripReasoning?: boolean },
 ): Promise<ModelMessage[]> {
   return Effect.runPromise(toModelMessagesEffect(input, model, options).pipe(Effect.provide(EffectLogger.layer)))
 }
